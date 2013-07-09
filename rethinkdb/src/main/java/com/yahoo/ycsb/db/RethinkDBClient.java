@@ -41,13 +41,16 @@ public class RethinkDBClient extends DB {
         Properties config = getProperties();
         String host = config.getProperty("rethinkdb.host", "localhost");
         int port = Integer.parseInt(config.getProperty("rethinkdb.port", "28015"));
-        boolean hard_durability = Boolean.parseBoolean(config.getProperty("rethinkdb.hard_durability", "true"));
+        String durability = config.getProperty("rethinkdb.durability", "hard");
         no_reply = Boolean.parseBoolean(config.getProperty("rethinkdb.no_reply", "false"));
         
         try {
             this.conn = new Connection(host, port, DATABASE);
 
             // Create database and table if not already there
+            //TODO move this check into the query language to
+            //     eliminate the race on the db list when we
+            //     do inserts with more than one thread.
             List<String> dbs = Term.db_list().run(this.conn);
             if (!dbs.contains(DATABASE)) {
                 Term.db_create(DATABASE).run(this.conn);
@@ -57,7 +60,7 @@ public class RethinkDBClient extends DB {
             if (!tbls.contains(TABLE)) {
                 Term.table_create(TABLE)
                     .addOption("primary_key", "__pk__")
-                    .addOption("hard_durability", hard_durability)
+                    .addOption("durability", durability)
                     .run(this.conn);
             }
         } catch (Exception e) {
