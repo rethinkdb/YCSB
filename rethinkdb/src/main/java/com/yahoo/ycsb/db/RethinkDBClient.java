@@ -48,6 +48,9 @@ public class RethinkDBClient extends DB {
             this.conn = new Connection(host, port, DATABASE);
 
             // Create database and table if not already there
+            //TODO move this check into the query language to
+            //     eliminate the race on the db list when we
+            //     do inserts with more than one thread.
             List<String> dbs = Term.db_list().run(this.conn);
             if (!dbs.contains(DATABASE)) {
                 Term.db_create(DATABASE).run(this.conn);
