@@ -28,8 +28,8 @@ public class StringByteIterator extends ByteIterator {
 	 * Put all of the entries of one map into the other, converting
 	 * String values into ByteIterators.
 	 */
-	public static void putAllAsByteIterators(Map<String, ByteIterator> out, Map<String, String> in) {
-	       for(String s: in.keySet()) { out.put(s, new StringByteIterator(in.get(s))); }
+	public static void putAllAsByteIterators(Map<String, ByteIterator> out, Map<String, Object> in) {
+	       for(String s: in.keySet()) { out.put(s, new StringByteIterator((String)in.get(s))); }
 	} 
 
 	/**
