@@ -12,27 +12,22 @@
   <packaging>jar</packaging>
 
   <dependencies>
-     <dependency>
-        <groupId>com.google.protobuf</groupId>
-        <artifactId>protobuf-java</artifactId>
-        <version>2.4.1</version>
-    </dependency>
     <dependency>
-        <groupId>org.json</groupId>
-        <artifactId>json</artifactId>
-        <version>20140107</version>
-    </dependency>
-    <dependency>
-        <groupId>com.dkhenry</groupId>
-        <artifactId>rethinkjava</artifactId>
-        <version>0.10-SNAPSHOT</version>
+        <groupId>com.rethinkdb</groupId>
+        <artifactId>rethinkdb</artifactId>
+        <version>0.5</version>
         <scope>system</scope>
-        <systemPath>${basedir}/rethinkjava.jar</systemPath>
+        <systemPath>${basedir}/rethinkdb-0.5-b1.jar</systemPath>
     </dependency>
     <dependency>
       <groupId>com.yahoo.ycsb</groupId>
       <artifactId>core</artifactId>
       <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.googlecode.json-simple</groupId>
+      <artifactId>json-simple</artifactId>
+      <version>1.1.1</version>
     </dependency>
   </dependencies>
 

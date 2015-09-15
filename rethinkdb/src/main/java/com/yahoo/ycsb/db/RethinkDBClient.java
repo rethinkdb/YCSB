@@ -19,11 +19,15 @@ import com.yahoo.ycsb.StringByteIterator;
 import com.yahoo.ycsb.DB;
 import com.yahoo.ycsb.DBException;
 
-import com.dkhenry.RethinkDB.*;
+import com.rethinkdb.RethinkDB;
+import com.rethinkdb.net.Connection;
+import com.rethinkdb.net.Cursor;
+import com.rethinkdb.gen.ast.ReqlExpr;
 
 public class RethinkDBClient extends DB {
 
-    private RqlConnection conn;
+    private Connection conn;
+    public static final RethinkDB r = RethinkDB.r;
 
     private static final String DATABASE = "ycsb";
 
@@ -42,23 +46,23 @@ public class RethinkDBClient extends DB {
         final String durability = config.getProperty("rethinkdb.durability", "hard");
 
         try {
-            this.conn = RqlConnection.connect(host, port);
+            this.conn = r.connection().hostname(host).port(port).connect();
 
             // Create database and table if not already there
             //TODO move this check into the query language to
             //     eliminate the race on the db list when we
             //     do inserts with more than one thread.
-            List<Object> dbs = this.conn.run(this.conn.db_list()).next().getList();
+            List<String> dbs = (List<String>)r.dbList().run(this.conn);
             if (!dbs.contains(DATABASE)) {
-                this.conn.run(this.conn.db_create(DATABASE));
+                r.dbCreate(DATABASE).pluck("dbs_created").run(this.conn);
             }
 
-            List<Object> tbls = this.conn.run(this.conn.db(DATABASE).table_list()).next().getList();
+            List<String> tbls = (List<String>)r.db(DATABASE).tableList().run(this.conn);
             if (!tbls.contains(TABLE)) {
-                this.conn.run(this.conn.db(DATABASE).table_create(TABLE,
-                    new HashMap() {{ put("primary_key","__pk__"); put("durability", durability); }}));
+                ((ReqlExpr)(r.db(DATABASE).tableCreate(TABLE).optArg("primary_key", "__pk__").optArg("durability", durability))).pluck("tables_created").run(this.conn);
             }
         } catch (Exception e) {
+            e.printStackTrace(System.err);
             throw new DBException(e.getMessage());
         }
 	}
@@ -88,11 +92,11 @@ public class RethinkDBClient extends DB {
 	public int read(String table, String key, Set<String> fields, HashMap<String,ByteIterator> result) {
         // (pluck (get (table `table`) `key`) `fields`)
         try {
-            RqlQuery q = this.conn.db(DATABASE).table(table).get(key);
+            ReqlExpr q = r.db(DATABASE).table(table).get(key);
             if (fields != null) {
                 q = q.pluck(fields.toArray());
             }
-            Map<String, Object> out = this.conn.run(q).next().getMap();
+            Map<String, String> out = (Map<String, String>)q.run(this.conn);
             StringByteIterator.putAllAsByteIterators(result, out);
             return 0;
         } catch (Exception e) {
@@ -114,10 +118,10 @@ public class RethinkDBClient extends DB {
 	public int scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String,ByteIterator>> result) {
         // (pluck (limit (between (table `table`) `startkey` null) `recordcount`) `fields`)
         try {
-            RqlCursor out = this.conn.run(this.conn.db(DATABASE).table(table).between(startkey, null).limit(recordcount).pluck(fields));
-            for (RqlObject row : out) {
+            Cursor<Map<String, String>> out = (Cursor<Map<String, String>>)r.db(DATABASE).table(table).between(startkey, r.maxval()).limit(recordcount).pluck(fields).run(this.conn);
+            for (Map<String, String> row : out) {
                 HashMap<String, ByteIterator> r2 = new HashMap<String, ByteIterator>();
-                StringByteIterator.putAllAsByteIterators(r2, row.getMap());
+                StringByteIterator.putAllAsByteIterators(r2, row);
                 result.add(r2);
             }
             return 0;
@@ -142,7 +146,7 @@ public class RethinkDBClient extends DB {
             Map<String, String> obj = new HashMap<String, String>();
             StringByteIterator.putAllAsStrings(obj, values);
 
-            this.conn.run(this.conn.db(DATABASE).table(table).get(key).update(obj));
+            r.db(DATABASE).table(table).get(key).update(obj).run(this.conn);
             return 0;
         } catch (Exception e) {
             e.printStackTrace(System.err);
@@ -165,7 +169,7 @@ public class RethinkDBClient extends DB {
             Map<String, String> obj = new HashMap<String, String>();
             StringByteIterator.putAllAsStrings(obj, values);
             obj.put("__pk__", key); // Insert primary key
-            this.conn.run(this.conn.db(DATABASE).table(table).insert(obj));
+            r.db(DATABASE).table(table).insert(obj).run(this.conn);
             return 0;
         } catch (Exception e) {
             e.printStackTrace(System.err);
@@ -183,7 +187,7 @@ public class RethinkDBClient extends DB {
 	public int delete(String table, String key) {
         // (delete (get (table `table`) `key`))
         try {
-            this.conn.run(this.conn.db(DATABASE).table(table).get(key).delete());
+            r.db(DATABASE).table(table).get(key).delete().run(this.conn);
             return 0;
         } catch (Exception e) {
             e.printStackTrace(System.err);
