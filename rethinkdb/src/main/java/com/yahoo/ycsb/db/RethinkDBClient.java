@@ -20,16 +20,18 @@ import com.rethinkdb.RethinkDB;
 import com.rethinkdb.net.Connection;
 import com.rethinkdb.net.Cursor;
 import com.rethinkdb.gen.ast.ReqlExpr;
+import com.rethinkdb.gen.ast.Table;
 
 public class RethinkDBClient extends DB {
   private Connection conn;
+  private String readMode;
   public static final RethinkDB R = RethinkDB.r;
 
   private static final String DATABASE = "ycsb";
 
   // TODO this should be available from config
   private static final String TABLE = "usertable";
-  
+
   /*
    * In case there are multiple hosts, we use this to pick one for each thread
    * round-robin.
@@ -40,22 +42,19 @@ public class RethinkDBClient extends DB {
     hostSelector = myHost + 1;
     return hosts[myHost];
   }
-  
+
   /*
    * Checks if the specified database and table exist. If not, creates them.
    * This method is synchronized to avoid race-conditions when inserting with
    * multiple threads.
    */
   private synchronized void maybeCreateTable(String durability) throws Exception {
-    // TODO: The plucks in here are to work-around a bug in the Java driver
-    //  that would crash on `null` fields in the query result. This bug
-    //  has since been fixed. Update the Java driver and remove the `pluck`s.
     // TODO: Also we should check the return values of these queries.
 
     // Create database and table if not already there
     List<String> dbs = (List<String>)R.dbList().run(this.conn);
     if (!dbs.contains(DATABASE)) {
-      R.dbCreate(DATABASE).pluck("dbs_created").run(this.conn);
+      R.dbCreate(DATABASE).run(this.conn);
     }
 
     List<String> tbls = (List<String>)R.db(DATABASE).tableList().run(this.conn);
@@ -63,7 +62,7 @@ public class RethinkDBClient extends DB {
       ((ReqlExpr)(R.db(DATABASE).tableCreate(TABLE)
                                 .optArg("primary_key", "__pk__")
                                 .optArg("durability", durability)))
-                 .pluck("tables_created").run(this.conn);
+                 .run(this.conn);
     }
     
     // If the table has already been created, wait until it becomes ready.
@@ -82,6 +81,8 @@ public class RethinkDBClient extends DB {
     int port = Integer.parseInt(config.getProperty("rethinkdb.port", "28015"));
     final String durability =
       config.getProperty("rethinkdb.durability", "hard");
+
+    this.readMode = config.getProperty("rethinkdb.readmode", null);
 
     try {
       this.conn = R.connection().hostname(host).port(port).connect();
@@ -120,7 +121,11 @@ public class RethinkDBClient extends DB {
                   HashMap<String, ByteIterator> result) {
     // (pluck (get (table `table`) `key`) `fields`)
     try {
-      ReqlExpr q = R.db(DATABASE).table(table).get(key);
+      Table t = R.db(DATABASE).table(table);
+      if (readMode != null) {
+        t = t.optArg("read_mode", readMode);
+      }
+      ReqlExpr q = t.get(key);
       if (fields != null) {
         q = q.pluck(fields.toArray());
       }
