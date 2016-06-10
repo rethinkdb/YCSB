@@ -129,7 +129,7 @@ public class RethinkDBClient extends DB {
       if (fields != null) {
         q = q.pluck(fields.toArray());
       }
-      Map<String, String> out = (Map<String, String>)q.run(this.conn);
+      Map<String, Object> out = (Map<String, Object>)q.run(this.conn);
       StringByteIterator.putAllAsByteIterators(result, out);
       return 0;
     } catch (Exception e) {
@@ -159,14 +159,14 @@ public class RethinkDBClient extends DB {
     // (pluck (limit (between (table `table`) `startkey` null) `recordcount`)
     // `fields`)
     try {
-      Cursor<Map<String, String>> out =
-        (Cursor<Map<String, String>>)R.db(DATABASE)
+      Cursor<Map<String, Object>> out =
+        (Cursor<Map<String, Object>>)R.db(DATABASE)
                                       .table(table)
                                       .between(startkey, R.maxval())
                                       .limit(recordcount)
                                       .pluck(fields)
                                       .run(this.conn);
-      for (Map<String, String> row : out) {
+      for (Map<String, Object> row : out) {
         HashMap<String, ByteIterator> r2 = new HashMap<String, ByteIterator>();
         StringByteIterator.putAllAsByteIterators(r2, row);
         result.add(r2);

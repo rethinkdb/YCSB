@@ -23,6 +23,8 @@
       <groupId>com.yahoo.ycsb</groupId>
       <artifactId>core</artifactId>
       <version>${project.version}</version>
+      <scope>system</scope>
+      <systemPath>${basedir}/../core/target/core-${project.version}.jar</systemPath>
     </dependency>
     <dependency>
       <groupId>com.googlecode.json-simple</groupId>
