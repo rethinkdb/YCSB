@@ -17,11 +17,7 @@
 
 package com.yahoo.ycsb;
 
-<<<<<<< HEAD
-import java.util.Map;
-=======
 import com.yahoo.ycsb.generator.soe.Generator;
->>>>>>> a4902d47fd25e0ce4ec4269bca46c078340c7d7a
 import com.yahoo.ycsb.measurements.Measurements;
 import org.apache.htrace.core.TraceScope;
 import org.apache.htrace.core.Tracer;
