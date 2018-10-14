@@ -93,12 +93,24 @@ LICENSE file.
     <kudu.version>1.6.0</kudu.version>
     <maprhbase.version>1.1.8-mapr-1710</maprhbase.version>
     <!--<mapkeeper.version>1.0</mapkeeper.version>-->
+<<<<<<< HEAD
     <mongodb.version>3.8.0</mongodb.version>
+=======
+    <mongodb.version>3.4.2</mongodb.version>
+>>>>>>> a4902d47fd25e0ce4ec4269bca46c078340c7d7a
     <mongodb.async.version>2.0.1</mongodb.async.version>
     <openjpa.jdbc.version>2.1.1</openjpa.jdbc.version>
     <orientdb.version>2.2.10</orientdb.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+<<<<<<< HEAD
     <redis.version>2.9.0</redis.version>
+=======
+    <thrift.version>0.8.0</thrift.version>
+    <hypertable.version>0.9.5.6</hypertable.version>
+    <couchbase.version>1.4.10</couchbase.version>
+    <couchbase2.version>2.7.0</couchbase2.version>
+    <tarantool.version>1.6.5</tarantool.version>
+>>>>>>> a4902d47fd25e0ce4ec4269bca46c078340c7d7a
     <riak.version>2.0.5</riak.version>
     <rocksdb.version>5.11.3</rocksdb.version>
     <s3.version>1.10.20</s3.version>
