@@ -1,5 +1,18 @@
 /**
- *  RethinkDB client binding for YCSB
+ * Copyright (c) 2013 - 2018 YCSB contributors. All rights reserved.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * permissions and limitations under the License. See accompanying
+ * LICENSE file.
  */
 
 package com.yahoo.ycsb.db;
@@ -11,10 +24,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.Vector;
 
-import com.yahoo.ycsb.ByteIterator;
-import com.yahoo.ycsb.StringByteIterator;
-import com.yahoo.ycsb.DB;
-import com.yahoo.ycsb.DBException;
+import com.yahoo.ycsb.*;
 
 import com.rethinkdb.RethinkDB;
 import com.rethinkdb.net.Connection;
@@ -22,17 +32,39 @@ import com.rethinkdb.net.Cursor;
 import com.rethinkdb.gen.ast.ReqlExpr;
 import com.rethinkdb.gen.ast.Table;
 
+
+/**
+ * RethinkDB binding for the YCSB framework using the RethinkDB Java
+ * <a href="https://rethinkdb.com/api/java/">driver</a>
+ * <p>
+ * See the <code>README.md</code> for configuration information.
+ * </p>
+ *
+ * @see <a href="https://rethinkdb.com/api/java/">RethinkDB Java driver</a>
+ */
 public class RethinkDBClient extends DB {
   private Connection conn;
   private String readMode;
-  public static final RethinkDB R = RethinkDB.r;
+  private static final RethinkDB R = RethinkDB.r;
 
+  // Defaults
   private static final String DATABASE = "ycsb";
-
-  // TODO this should be available from config
+  private static final String PORT = "28015";
+  private static final String DURABILITY = "hard";
   private static final String TABLE = "usertable";
 
-  /*
+
+  /**
+   * Put all of the entries of one map into the other, converting
+   * String values into ByteIterator values.
+   */
+  private static void putAllAsByteIterators(Map<String, ByteIterator> out, Map<String, Object> in) {
+    for (Map.Entry<String, Object> entry : in.entrySet()) {
+      out.put(entry.getKey(), new StringByteIterator(entry.getValue().toString()));
+    }
+  }
+
+  /**
    * In case there are multiple hosts, we use this to pick one for each thread
    * round-robin.
    */
@@ -43,30 +75,28 @@ public class RethinkDBClient extends DB {
     return hosts[myHost];
   }
 
-  /*
+  /**
    * Checks if the specified database and table exist. If not, creates them.
    * This method is synchronized to avoid race-conditions when inserting with
    * multiple threads.
    */
-  private synchronized void maybeCreateTable(String durability) throws Exception {
-    // TODO: Also we should check the return values of these queries.
-
+  private synchronized void maybeCreateTable(String durability, String table) {
     // Create database and table if not already there
-    List<String> dbs = (List<String>)R.dbList().run(this.conn);
+    List<String> dbs = R.dbList().run(this.conn);
     if (!dbs.contains(DATABASE)) {
       R.dbCreate(DATABASE).run(this.conn);
     }
 
-    List<String> tbls = (List<String>)R.db(DATABASE).tableList().run(this.conn);
-    if (!tbls.contains(TABLE)) {
-      ((ReqlExpr)(R.db(DATABASE).tableCreate(TABLE)
-                                .optArg("primary_key", "__pk__")
-                                .optArg("durability", durability)))
-                 .run(this.conn);
+    List<String> tbls = R.db(DATABASE).tableList().run(this.conn);
+    if (!tbls.contains(table)) {
+      ((R.db(DATABASE).tableCreate(table)
+          .optArg("primary_key", "__pk__")
+          .optArg("durability", durability)))
+          .run(this.conn);
     }
-    
+
     // If the table has already been created, wait until it becomes ready.
-    R.db(DATABASE).table(TABLE).wait_().run(this.conn);
+    R.db(DATABASE).table(table).wait_().run(this.conn);
   }
 
   /**
@@ -78,16 +108,17 @@ public class RethinkDBClient extends DB {
     String hostString = config.getProperty("rethinkdb.host", "localhost");
     String[] hosts = hostString.split(",");
     String host = pickHost(hosts);
-    int port = Integer.parseInt(config.getProperty("rethinkdb.port", "28015"));
-    final String durability =
-      config.getProperty("rethinkdb.durability", "hard");
+
+    final int port = Integer.parseInt(config.getProperty("rethinkdb.port", PORT));
+    final String durability = config.getProperty("rethinkdb.durability", DURABILITY);
+    final String table = config.getProperty("rethinkdb.table", TABLE);
 
     this.readMode = config.getProperty("rethinkdb.readmode", null);
 
     try {
       this.conn = R.connection().hostname(host).port(port).connect();
 
-      maybeCreateTable(durability);
+      maybeCreateTable(durability, table);
     } catch (Exception e) {
       e.printStackTrace(System.err);
       throw new DBException(e.getMessage());
@@ -114,12 +145,12 @@ public class RethinkDBClient extends DB {
    * @param key The record key of the record to read.
    * @param fields The list of fields to read, or null for all of them
    * @param result A HashMap of field/value pairs for the result
-   * @return Zero on success, a non-zero error code on error or "not found".
+   * @return Status.OK on success, Status.ERROR on error or Status.NOT_FOUND.
    */
-  public int read(String table,
-                  String key, Set<String> fields,
-                  HashMap<String, ByteIterator> result) {
-    // (pluck (get (table `table`) `key`) `fields`)
+  @Override
+  public Status read(final String table,
+                     final String key, Set<String> fields,
+                     final Map<String, ByteIterator> result) {
     try {
       Table t = R.db(DATABASE).table(table);
       if (readMode != null) {
@@ -129,12 +160,15 @@ public class RethinkDBClient extends DB {
       if (fields != null) {
         q = q.pluck(fields.toArray());
       }
-      Map<String, Object> out = (Map<String, Object>)q.run(this.conn);
-      StringByteIterator.putAllAsByteIterators(result, out);
-      return 0;
+
+      Map<String, Object> out = q.run(this.conn);
+
+      putAllAsByteIterators(result, out);
+
+      return Status.OK;
     } catch (Exception e) {
       e.printStackTrace(System.err);
-      return 1;
+      return Status.ERROR;
     }
   }
 
@@ -148,35 +182,40 @@ public class RethinkDBClient extends DB {
    * @param fields The list of fields to read, or null for all of them
    * @param result A Vector of HashMaps, where each HashMap is a set field/value
    * pairs for one record
-   * @return Zero on success, a non-zero error code on error.  See this class's
-   * description for a discussion of error codes.
+   * @return Status.OK on success, Status.ERROR on error or Status.NOT_FOUND.
    */
-  public int scan(String table,
-                  String startkey,
-                  int recordcount,
-                  Set<String> fields,
-                  Vector<HashMap<String, ByteIterator>> result) {
-    // (pluck (limit (between (table `table`) `startkey` null) `recordcount`)
-    // `fields`)
+  @Override
+  public Status scan(final String table,
+                     final String startkey,
+                     int recordcount,
+                     final Set<String> fields,
+                     final Vector<HashMap<String, ByteIterator>> result) {
     try {
-      Cursor<Map<String, Object>> out =
-        (Cursor<Map<String, Object>>)R.db(DATABASE)
-                                      .table(table)
-                                      .between(startkey, R.maxval())
-                                      .limit(recordcount)
-                                      .pluck(fields)
-                                      .run(this.conn);
-      for (Map<String, Object> row : out) {
+      Cursor<Map<String, Object>> cursor = R.db(DATABASE)
+          .table(table)
+          .between(startkey, R.maxval())
+          .limit(recordcount)
+          .pluck(fields.toArray())
+          .run(this.conn);
+
+      if (!cursor.hasNext()) {
+        System.err.println("Nothing found in scan for key " + startkey);
+        return Status.NOT_FOUND;
+      }
+
+      for (Map<String, Object> row : cursor) {
         HashMap<String, ByteIterator> r2 = new HashMap<String, ByteIterator>();
-        StringByteIterator.putAllAsByteIterators(r2, row);
+        putAllAsByteIterators(r2, row);
         result.add(r2);
       }
-      return 0;
+
+      return Status.OK;
     } catch (Exception e) {
       e.printStackTrace(System.err);
-      return 1;
+      return Status.ERROR;
     }
   }
+
 
   /**
    * Update a record in the database. Any field/value pairs in the specified
@@ -186,23 +225,22 @@ public class RethinkDBClient extends DB {
    * @param table The name of the table
    * @param key The record key of the record to write.
    * @param values A HashMap of field/value pairs to update in the record
-   * @return Zero on success, a non-zero error code on error.  See this class's
-   * description for a discussion of error codes.
+   * @return Status.OK on success, Status.ERROR on error.
    */
-  public int update(String table,
-                    String key,
-                    HashMap<String, ByteIterator> values) {
-    // (update (get (table `table`) `key`) `values`)
-    // TODO: Check for successful update?
+  @Override
+  public Status update(final String table,
+                       final String key,
+                       final Map<String, ByteIterator> values) {
     try {
       Map<String, String> obj = new HashMap<String, String>();
       StringByteIterator.putAllAsStrings(obj, values);
 
-      R.db(DATABASE).table(table).get(key).update(obj).run(this.conn);
-      return 0;
+      Map<String, Object> result = R.db(DATABASE).table(table).get(key).update(obj).run(this.conn);
+      final long replaced = (long) result.get("replaced");
+      return replaced == 1 ? Status.OK : Status.ERROR;
     } catch (Exception e) {
       e.printStackTrace(System.err);
-      return 1;
+      return Status.ERROR;
     }
   }
 
@@ -214,23 +252,25 @@ public class RethinkDBClient extends DB {
    * @param table The name of the table
    * @param key The record key of the record to insert.
    * @param values A HashMap of field/value pairs to insert in the record
-   * @return Zero on success, a non-zero error code on error.  See this class's
-   * description for a discussion of error codes.
+   * @return Status.OK on success, Status.ERROR on error.
    */
-  public int insert(String table,
-                    String key,
-                    HashMap<String, ByteIterator> values) {
-    // (insert (table `table`) `values`)
-    // TODO: Check for successful insertion?
+  @Override
+  public Status insert(final String table,
+                       final String key,
+                       final Map<String, ByteIterator> values) {
     try {
-      Map<String, String> obj = new HashMap<String, String>();
+      Map<String, String> obj = new HashMap<>();
       StringByteIterator.putAllAsStrings(obj, values);
-      obj.put("__pk__", key); // Insert primary key
-      R.db(DATABASE).table(table).insert(obj).run(this.conn);
-      return 0;
+
+      // Insert primary key
+      obj.put("__pk__", key);
+      Map<String, Object> result = R.db(DATABASE).table(table).insert(obj).run(this.conn);
+
+      final long inserted = (long) result.get("inserted");
+      return inserted == 1 ? Status.OK : Status.ERROR;
     } catch (Exception e) {
       e.printStackTrace(System.err);
-      return 1;
+      return Status.ERROR;
     }
   }
 
@@ -239,18 +279,16 @@ public class RethinkDBClient extends DB {
    *
    * @param table The name of the table
    * @param key The record key of the record to delete.
-   * @return Zero on success, a non-zero error code on error.  See this class's
-   * description for a discussion of error codes.
+   * @return Status.OK on success, Status.ERROR on error or Status.NOT_FOUND.
    */
-  public int delete(String table, String key) {
-    // (delete (get (table `table`) `key`))
-    // TODO: Check for successful deletion?
+  public Status delete(final String table, final String key) {
     try {
-      R.db(DATABASE).table(table).get(key).delete().run(this.conn);
-      return 0;
+      Map<String, Object> result = R.db(DATABASE).table(table).get(key).delete().run(this.conn);
+      final long deleted = (long) result.get("deleted");
+      return deleted == 1 ? Status.OK : Status.ERROR;
     } catch (Exception e) {
       e.printStackTrace(System.err);
-      return 1;
+      return Status.ERROR;
     }
   }
-};
+}

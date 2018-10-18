@@ -99,6 +99,7 @@ LICENSE file.
     <orientdb.version>2.2.10</orientdb.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <redis.version>2.9.0</redis.version>
+    <rethinkdb.version>2.3.3</rethinkdb.version>
     <riak.version>2.0.5</riak.version>
     <rocksdb.version>5.11.3</rocksdb.version>
     <s3.version>1.10.20</s3.version>
@@ -154,6 +155,7 @@ LICENSE file.
     <module>rados</module>
     <module>redis</module>
     <module>rest</module>
+    <module>rethinkdb</module>
     <module>riak</module>
     <module>rocksdb</module>
     <module>s3</module>
